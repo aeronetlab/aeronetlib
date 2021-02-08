@@ -294,6 +294,12 @@ class Band(GeoObject):
         """
         if dst_crs == 'utm':
             dst_crs = get_utm_zone(self.crs, self.transform, (self.height, self.width))
+        else:
+            dst_crs = dst_crs if isinstance(dst_crs, CRS) else CRS.from_user_input(dst_crs)
+
+        # Old rasterio compatibility: a separate check for validity
+        if not dst_crs.is_valid:
+            raise rasterio.errors.CRSError('Invalid CRS {} given'.format(dst_crs))
 
         # get temporary filepath if such is not provided
         tmp_file = False if fp is not None else True
@@ -433,11 +439,15 @@ class BandSample(GeoObject):
         self._raster = band_shape_guard(raster)
         self._nodata = nodata
         self._transform = Affine(*transform) if not isinstance(transform, Affine) else transform
-        self._crs = CRS(init=crs) if not isinstance(crs, CRS) else crs
+        self._crs = CRS.from_user_input(crs) if not isinstance(crs, CRS) else crs
+
+        # Old rasterio compatibility: a separate check for validity
+        if not self._crs.is_valid:
+            raise rasterio.errors.CRSError('Invalid CRS {} given'.format(crs))
 
     def __eq__(self, other):
         res = np.allclose(self.numpy(), other.numpy())
-        res = res and (self.crs.get('init') == other.crs.get('init'))
+        res = res and (self.crs == other.crs)
         res = res and np.allclose(np.array(self.transform), np.array(other.transform))
         return res
 
@@ -604,8 +614,14 @@ class BandSample(GeoObject):
         Returns:
             BandSample: a new instance with changed CRS.
         """
-        if dst_crs == 'utm':
+        if isinstance(dst_crs, str) and dst_crs == 'utm':
             dst_crs = get_utm_zone(self.crs, self.transform, (self.height, self.width))
+        else:
+            dst_crs = dst_crs if isinstance(dst_crs, CRS) else CRS.from_user_input(dst_crs)
+
+        # Old rasterio compatibility: a separate check for validity
+        if not dst_crs.is_valid:
+            raise rasterio.errors.CRSError('Invalid CRS {} given'.format(dst_crs))
 
         dst_transform, dst_width, dst_height = calculate_default_transform(
             self.crs, dst_crs, self.width, self.height, *self.bounds)

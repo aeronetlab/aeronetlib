@@ -71,7 +71,7 @@ class BandCollection(GeoObject):
     @property
     def bounds(self):
         return self._bands[0].bounds
-    
+
     @property
     def shape(self):
         return self.count, self._bands[0].height, self._bands[0].width

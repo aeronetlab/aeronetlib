@@ -1,9 +1,9 @@
 import math
 from rasterio.transform import xy
 from rasterio import warp
+from rasterio.crs import CRS
 
-
-CRS_LATLON = 'EPSG:4326'
+CRS_LATLON = CRS.from_epsg(4326)
 
 
 def _utm_zone(lat, lon):
@@ -17,22 +17,25 @@ def _utm_zone(lat, lon):
     str_zone = str(zone).zfill(2)
     
     if lat > 0:
-        return 'EPSG:326' + str_zone
+        return CRS.from_string('EPSG:326' + str_zone)
     else:
-        return 'EPSG:325' + str_zone
+        return CRS.from_string('EPSG:325' + str_zone)
+
 
 def get_utm_zone(crs, transform, shape):
     """
     Calculates the UTM zone for the image center
     :param crs: image crs
     :param transform: image transform
-    :param size: image size [height, width]
-    :return: UTM zone in format 'EPSG:32XYZ'
+    :param shape: image size [height, width]
+    :return: rasterio CRS of given UTM zone
     """
-    #find image extents
-    #todo: check for image size!
-    #if it is more than 600 km longitude - recommend not to transform to utm at once
-    #find image center
+    # find image extents
+    # todo: check for image size!
+    # if it is more than 600 km longitude, or crosses the equator, or 80N/ 80S line
+    # - recommend not to transform to utm at once
+
+    # find image center
     center_xy = xy(transform, shape[0] / 2, shape[1] / 2)
     center_latlon = warp.transform(crs, CRS_LATLON, [center_xy[0]], [center_xy[1]])
     #calc zone
