@@ -6,8 +6,12 @@ from shapely.geometry import shape, Polygon, MultiPolygon, GeometryCollection
 
 from ..vector import Feature, FeatureCollection
 
+cv_approx = {'simple': cv2.CHAIN_APPROX_SIMPLE,
+             'tc89_kcos': cv2.CHAIN_APPROX_TC89_KCOS,
+             'tc89_l1': cv2.CHAIN_APPROX_TC89_L1}
 
-def polygonize(sample, epsilon=0.1, properties={}):
+
+def polygonize(sample, epsilon=0.1, properties=None, approx='tc89_kcos', upscale=1.0):
     """ Transform the raster mask to vector polygons.
     The pixels in the raster mask are treated as belonging to the object if their value is non-zero, and zero values are background.
     All the objects are transformed to the vector form (polygons).
@@ -25,17 +29,27 @@ def polygonize(sample, epsilon=0.1, properties={}):
         epsilon: the epsilon parameter for the cv2.approxPolyDP, which specifies the approximation accuracy.
         This is the maximum distance between the original curve and its approximation
         properties: (dict) Properties to be added to the resulting FeatureCollection
+        approx: Approximation parameter for cv2:findContours
+        upscale (float): scale image for better precision of the polygon. The polygon is correctly downscaled back.
+            works only when `upscale > 1`, default value means no upscaling
 
     Returns:
         FeatureCollection:
             Polygons in the CRS of the sample, that represent non-black objects in the image
+
     """
-    geoms = _vectorize(sample.numpy(), epsilon=epsilon, transform=sample.transform)
+
+    approx = cv_approx[approx.lower()]
+    geoms = _vectorize(sample.numpy(), epsilon=epsilon, approx=approx, transform=sample.transform)
     # remove all the geometries except for polygons
     polys = _extract_polygons(geoms)
+
+    if properties is None:
+        properties = {}
     features = ([Feature(geometry, properties=properties, crs=sample.crs)
                  for geometry in polys])
     return FeatureCollection(features, crs=sample.crs)
+
 
 def _extract_polygons(geometries):
     """
@@ -62,7 +76,9 @@ def _extract_polygons(geometries):
     return shapes
 
 
-def _vectorize(binary_image, epsilon=0., min_area=1., transform=IDENTITY, upscale=1):
+def _vectorize(binary_image,
+               epsilon=0., min_area=1., approx=cv2.CHAIN_APPROX_TC89_KCOS,
+               transform=IDENTITY, upscale=1.0):
     """
     Vectorize binary image, returns a 4-level list of floats [[[[X,Y]]]]
 
@@ -87,7 +103,7 @@ def _vectorize(binary_image, epsilon=0., min_area=1., transform=IDENTITY, upscal
     # search for all contours
     contours_result = cv2.findContours(
         binary_image,
-        cv2.RETR_CCOMP, cv2.CHAIN_APPROX_TC89_KCOS)
+        cv2.RETR_CCOMP, approx)
     # For compatibility with opencv3, where contours_result[0]=image, so we should throw it away
     contours, hierarchy = contours_result if len(contours_result) == 2 else contours_result[1:]
 
